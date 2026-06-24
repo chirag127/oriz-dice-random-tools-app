@@ -1,15 +1,26 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro'
 ---
-<BaseLayout title="list shuffle — Oriz Random" description="list shuffle — runs in your browser. Part of Oriz Random.">
+<BaseLayout title="List Shuffler — Oriz Random" description="Paste a list, one item per line, and shuffle it with crypto randomness. Runs in your browser.">
   <article class="tool">
     <p class="back mono"><a href="/">← all tools</a></p>
     <h1 class="h1">list shuffle</h1>
-    <p class="status mono">coming · v0.1</p>
-    <p class="lede">
-      This feature is on the v0.1 roadmap. The page exists so we can iterate on
-      the design and copy in parallel; the implementation lands next sprint.
-    </p>
+    <p class="status mono ready">ready · v0.1</p>
+    <p class="lede">Paste items one per line. Shuffles with a crypto Fisher-Yates — every permutation equally likely.</p>
+
+    <div class="tool-body">
+      <label class="field">
+        <span class="field-label mono">input list (one per line)</span>
+        <textarea id="list-input" class="io" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana" rows="7" spellcheck="false"></textarea>
+      </label>
+      <button id="shuffle-btn" class="btn primary">Shuffle</button>
+
+      <div id="result-area" class="result-area hidden" aria-live="polite">
+        <div id="shuffled-list" class="shuffled-list mono"></div>
+        <button id="copy-btn" class="btn secondary small">Copy shuffled list</button>
+      </div>
+      <p id="error-msg" class="error-msg hidden mono" role="alert"></p>
+    </div>
   </article>
 </BaseLayout>
 
@@ -21,18 +32,87 @@ import BaseLayout from '~/layouts/BaseLayout.astro'
   .h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.75rem, 4vw, 2.5rem); margin: 0 0 0.5rem; line-height: 1.1; }
   .status { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 2rem; }
   .status.ready { color: var(--accent); }
-  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; }
-  .placeholder { max-width: 60ch; }
-  .placeholder p { color: var(--muted); margin: 0 0 1rem; }
+  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; margin: 0 0 1.5rem; }
+  .tool-body { max-width: 36rem; }
+  .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+  .field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
   .io {
-    width: 100%;
-    padding: 1rem;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    color: var(--ink);
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
+    width: 100%; padding: 0.75rem;
+    background: var(--paper-2); border: 1px solid var(--rule);
+    color: var(--ink); font-family: var(--font-mono); font-size: 0.875rem;
     resize: vertical;
   }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 0.75rem; }
+  .io:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn {
+    padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border: none; cursor: pointer; transition: opacity 100ms;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { opacity: 0.7; }
+  .btn.primary { background: var(--accent); color: var(--paper); }
+  .btn.secondary { background: var(--paper-2); color: var(--ink); border: 1px solid var(--rule); }
+  .btn.small { font-size: 0.75rem; padding: 0.4rem 0.85rem; margin-top: 0.75rem; }
+  .result-area { margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--paper-2); border: 1px solid var(--rule); }
+  .result-area.hidden { display: none; }
+  .shuffled-list { display: flex; flex-direction: column; gap: 0.25rem; }
+  .list-item {
+    font-size: 0.875rem; padding: 0.2rem 0;
+    border-bottom: 1px solid var(--rule); color: var(--ink);
+    animation: slide-in 0.12s ease-out;
+  }
+  .list-item:last-child { border-bottom: none; }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .error-msg { font-size: 0.875rem; color: #e05252; margin-top: 0.5rem; }
+  .error-msg.hidden { display: none; }
 </style>
+
+<script>
+  function cryptoShuffle<T>(arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function shuffle() {
+    const inputEl = document.getElementById('list-input') as HTMLTextAreaElement;
+    const resultArea = document.getElementById('result-area')!;
+    const listEl = document.getElementById('shuffled-list')!;
+    const errorEl = document.getElementById('error-msg')!;
+
+    const items = inputEl.value.split('\n').map(s => s.trimEnd()).filter(Boolean);
+    if (items.length < 2) {
+      errorEl.textContent = 'Enter at least 2 items.';
+      errorEl.classList.remove('hidden');
+      resultArea.classList.add('hidden');
+      return;
+    }
+    errorEl.classList.add('hidden');
+
+    const shuffled = cryptoShuffle(items);
+    listEl.innerHTML = '';
+    shuffled.forEach((item, i) => {
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      div.style.animationDelay = `${i * 20}ms`;
+      div.textContent = `${String(i + 1).padStart(2, '0')}  ${item}`;
+      listEl.appendChild(div);
+    });
+    resultArea.classList.remove('hidden');
+  }
+
+  document.getElementById('shuffle-btn')!.addEventListener('click', shuffle);
+  document.getElementById('copy-btn')!.addEventListener('click', async () => {
+    const items = document.querySelectorAll('.list-item');
+    const text = Array.from(items).map(el => (el.textContent ?? '').replace(/^\d+\s+/, '')).join('\n');
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copy-btn') as HTMLButtonElement;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+</script>

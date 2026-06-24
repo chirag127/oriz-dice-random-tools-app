@@ -1,15 +1,35 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro'
 ---
-<BaseLayout title="lottery picker — Oriz Random" description="lottery picker — runs in your browser. Part of Oriz Random.">
+<BaseLayout title="Lottery Picker — Oriz Random" description="Pick N unique numbers from a range 1–M. Cryptographically fair. Runs in your browser.">
   <article class="tool">
     <p class="back mono"><a href="/">← all tools</a></p>
     <h1 class="h1">lottery picker</h1>
-    <p class="status mono">coming · v0.1</p>
-    <p class="lede">
-      This feature is on the v0.1 roadmap. The page exists so we can iterate on
-      the design and copy in parallel; the implementation lands next sprint.
-    </p>
+    <p class="status mono ready">ready · v0.1</p>
+    <p class="lede">Pick <em>N</em> unique numbers from 1 to <em>M</em>. Results are sorted ascending. Uses <code>crypto.getRandomValues</code>.</p>
+
+    <div class="tool-body">
+      <div class="fields">
+        <label class="field">
+          <span class="field-label mono">pick N numbers</span>
+          <input id="pick" class="input mono" type="number" value="6" min="1" max="100" />
+        </label>
+        <label class="field">
+          <span class="field-label mono">from 1 to M</span>
+          <input id="total" class="input mono" type="number" value="49" min="2" max="10000" />
+        </label>
+      </div>
+      <button id="pick-btn" class="btn primary">Pick</button>
+
+      <div id="result-area" class="result-area hidden" aria-live="polite">
+        <div id="balls" class="balls"></div>
+        <div class="result-line">
+          <span id="result-text" class="result-detail mono"></span>
+        </div>
+        <button id="copy-btn" class="btn secondary small">Copy numbers</button>
+      </div>
+      <p id="error-msg" class="error-msg hidden mono" role="alert"></p>
+    </div>
   </article>
 </BaseLayout>
 
@@ -21,18 +41,103 @@ import BaseLayout from '~/layouts/BaseLayout.astro'
   .h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.75rem, 4vw, 2.5rem); margin: 0 0 0.5rem; line-height: 1.1; }
   .status { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 2rem; }
   .status.ready { color: var(--accent); }
-  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; }
-  .placeholder { max-width: 60ch; }
-  .placeholder p { color: var(--muted); margin: 0 0 1rem; }
-  .io {
-    width: 100%;
-    padding: 1rem;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    color: var(--ink);
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    resize: vertical;
+  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; margin: 0 0 1.5rem; }
+  .lede code { background: var(--paper-2); padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.85em; }
+  .lede em { color: var(--ink); font-style: normal; font-weight: 600; }
+  .tool-body { max-width: 32rem; }
+  .fields { display: flex; gap: 1rem; margin-bottom: 1rem; }
+  .field { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; }
+  .field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .input {
+    padding: 0.6rem 0.75rem;
+    background: var(--paper-2); border: 1px solid var(--rule);
+    color: var(--ink); font-family: var(--font-mono); font-size: 1rem; width: 100%;
   }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 0.75rem; }
+  .input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn {
+    padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border: none; cursor: pointer; transition: opacity 100ms;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { opacity: 0.7; }
+  .btn.primary { background: var(--accent); color: var(--paper); }
+  .btn.secondary { background: var(--paper-2); color: var(--ink); border: 1px solid var(--rule); }
+  .btn.small { font-size: 0.75rem; padding: 0.4rem 0.85rem; margin-top: 0.75rem; }
+  .result-area { margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--paper-2); border: 1px solid var(--rule); }
+  .result-area.hidden { display: none; }
+  .balls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .ball {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 2.4rem; height: 2.4rem; padding: 0 0.4rem;
+    background: var(--accent); color: var(--paper);
+    border-radius: 50%; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem;
+    animation: pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .result-line { margin-top: 0.25rem; }
+  .result-detail { font-size: 0.875rem; color: var(--muted); }
+  .error-msg { font-size: 0.875rem; color: #e05252; margin-top: 0.5rem; }
+  .error-msg.hidden { display: none; }
 </style>
+
+<script>
+  function cryptoRandInt(max: number): number {
+    // [0, max) exclusive
+    const arr = new Uint32Array(1);
+    do { crypto.getRandomValues(arr); }
+    while (arr[0] >= Math.floor(0xFFFFFFFF / max) * max);
+    return arr[0] % max;
+  }
+
+  function pick() {
+    const pickEl = document.getElementById('pick') as HTMLInputElement;
+    const totalEl = document.getElementById('total') as HTMLInputElement;
+    const resultArea = document.getElementById('result-area')!;
+    const ballsEl = document.getElementById('balls')!;
+    const resultText = document.getElementById('result-text')!;
+    const errorEl = document.getElementById('error-msg')!;
+
+    const n = parseInt(pickEl.value);
+    const m = parseInt(totalEl.value);
+
+    if (isNaN(n) || isNaN(m) || n < 1 || m < 2 || n > m) {
+      errorEl.textContent = 'N must be ≥ 1 and ≤ M.';
+      errorEl.classList.remove('hidden');
+      resultArea.classList.add('hidden');
+      return;
+    }
+    errorEl.classList.add('hidden');
+
+    // Knuth partial shuffle to pick n from [1..m]
+    const pool: number[] = Array.from({ length: m }, (_, i) => i + 1);
+    const picked: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const j = i + cryptoRandInt(m - i);
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+      picked.push(pool[i]);
+    }
+    picked.sort((a, b) => a - b);
+
+    ballsEl.innerHTML = '';
+    picked.forEach((num, i) => {
+      const ball = document.createElement('span');
+      ball.className = 'ball';
+      ball.textContent = String(num);
+      ball.style.animationDelay = `${i * 60}ms`;
+      ballsEl.appendChild(ball);
+    });
+    resultText.textContent = `${n} picks from 1–${m}: ${picked.join(', ')}`;
+    resultArea.classList.remove('hidden');
+  }
+
+  document.getElementById('pick-btn')!.addEventListener('click', pick);
+  document.getElementById('copy-btn')!.addEventListener('click', async () => {
+    const balls = document.querySelectorAll('.ball');
+    const text = Array.from(balls).map(el => el.textContent).join(', ');
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copy-btn') as HTMLButtonElement;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+</script>

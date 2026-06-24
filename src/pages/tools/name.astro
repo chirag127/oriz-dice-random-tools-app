@@ -1,15 +1,30 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro'
 ---
-<BaseLayout title="name picker — Oriz Random" description="name picker — runs in your browser. Part of Oriz Random.">
+<BaseLayout title="Name Picker — Oriz Random" description="Paste names one per line, pick 1 or N winners at random. Cryptographically fair. Runs in your browser.">
   <article class="tool">
     <p class="back mono"><a href="/">← all tools</a></p>
     <h1 class="h1">name picker</h1>
-    <p class="status mono">coming · v0.1</p>
-    <p class="lede">
-      This feature is on the v0.1 roadmap. The page exists so we can iterate on
-      the design and copy in parallel; the implementation lands next sprint.
-    </p>
+    <p class="status mono ready">ready · v0.1</p>
+    <p class="lede">Paste names, one per line. Pick 1 or N winners without replacement. Crypto fair.</p>
+
+    <div class="tool-body">
+      <label class="field">
+        <span class="field-label mono">names (one per line)</span>
+        <textarea id="names-input" class="io" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana&#10;Eve" rows="7" spellcheck="false"></textarea>
+      </label>
+      <label class="field" style="max-width:14rem;">
+        <span class="field-label mono">pick how many</span>
+        <input id="pick-count" class="input mono" type="number" value="1" min="1" />
+      </label>
+      <button id="pick-btn" class="btn primary">Pick winner(s)</button>
+
+      <div id="result-area" class="result-area hidden" aria-live="polite">
+        <div id="winners" class="winners"></div>
+        <button id="copy-btn" class="btn secondary small">Copy winners</button>
+      </div>
+      <p id="error-msg" class="error-msg hidden mono" role="alert"></p>
+    </div>
   </article>
 </BaseLayout>
 
@@ -21,18 +36,108 @@ import BaseLayout from '~/layouts/BaseLayout.astro'
   .h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.75rem, 4vw, 2.5rem); margin: 0 0 0.5rem; line-height: 1.1; }
   .status { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 2rem; }
   .status.ready { color: var(--accent); }
-  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; }
-  .placeholder { max-width: 60ch; }
-  .placeholder p { color: var(--muted); margin: 0 0 1rem; }
+  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; margin: 0 0 1.5rem; }
+  .tool-body { max-width: 36rem; }
+  .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+  .field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
   .io {
-    width: 100%;
-    padding: 1rem;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    color: var(--ink);
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
+    width: 100%; padding: 0.75rem;
+    background: var(--paper-2); border: 1px solid var(--rule);
+    color: var(--ink); font-family: var(--font-mono); font-size: 0.875rem;
     resize: vertical;
   }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 0.75rem; }
+  .io:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .input {
+    padding: 0.6rem 0.75rem;
+    background: var(--paper-2); border: 1px solid var(--rule);
+    color: var(--ink); font-family: var(--font-mono); font-size: 1rem;
+  }
+  .input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn {
+    padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border: none; cursor: pointer; transition: opacity 100ms;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { opacity: 0.7; }
+  .btn.primary { background: var(--accent); color: var(--paper); }
+  .btn.secondary { background: var(--paper-2); color: var(--ink); border: 1px solid var(--rule); }
+  .btn.small { font-size: 0.75rem; padding: 0.4rem 0.85rem; margin-top: 0.75rem; }
+  .result-area { margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--paper-2); border: 1px solid var(--rule); }
+  .result-area.hidden { display: none; }
+  .winners { display: flex; flex-direction: column; gap: 0.5rem; }
+  .winner-card {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--paper); border: 1px solid var(--accent);
+    animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .winner-num { font-family: var(--font-mono); font-size: 11px; color: var(--muted); min-width: 2ch; }
+  .winner-name { font-family: var(--font-mono); font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+  @keyframes pop-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .error-msg { font-size: 0.875rem; color: #e05252; margin-top: 0.5rem; }
+  .error-msg.hidden { display: none; }
 </style>
+
+<script>
+  function cryptoRandInt(max: number): number {
+    const arr = new Uint32Array(1);
+    do { crypto.getRandomValues(arr); }
+    while (arr[0] >= Math.floor(0xFFFFFFFF / max) * max);
+    return arr[0] % max;
+  }
+
+  function pickWinners() {
+    const namesEl = document.getElementById('names-input') as HTMLTextAreaElement;
+    const countEl = document.getElementById('pick-count') as HTMLInputElement;
+    const resultArea = document.getElementById('result-area')!;
+    const winnersEl = document.getElementById('winners')!;
+    const errorEl = document.getElementById('error-msg')!;
+
+    const names = namesEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+    const count = parseInt(countEl.value);
+
+    if (names.length < 2) {
+      errorEl.textContent = 'Enter at least 2 names.';
+      errorEl.classList.remove('hidden');
+      resultArea.classList.add('hidden');
+      return;
+    }
+    if (isNaN(count) || count < 1 || count > names.length) {
+      errorEl.textContent = `Pick count must be between 1 and ${names.length}.`;
+      errorEl.classList.remove('hidden');
+      resultArea.classList.add('hidden');
+      return;
+    }
+    errorEl.classList.add('hidden');
+
+    // Partial Knuth shuffle
+    const pool = [...names];
+    const winners: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const j = i + cryptoRandInt(pool.length - i);
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+      winners.push(pool[i]);
+    }
+
+    winnersEl.innerHTML = '';
+    winners.forEach((name, i) => {
+      const card = document.createElement('div');
+      card.className = 'winner-card';
+      card.style.animationDelay = `${i * 80}ms`;
+      card.innerHTML = `<span class="winner-num">${i + 1}</span><span class="winner-name">${name}</span>`;
+      winnersEl.appendChild(card);
+    });
+    resultArea.classList.remove('hidden');
+  }
+
+  document.getElementById('pick-btn')!.addEventListener('click', pickWinners);
+  document.getElementById('copy-btn')!.addEventListener('click', async () => {
+    const names = document.querySelectorAll('.winner-name');
+    const text = Array.from(names).map(el => el.textContent).join('\n');
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copy-btn') as HTMLButtonElement;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+</script>

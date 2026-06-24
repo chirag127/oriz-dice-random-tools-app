@@ -1,6 +1,7 @@
 ---
 import '~/styles/global.css'
 import { pricingUrl } from '@chirag127/astro-shell/pricing-url'
+import FamilySidebar from '@chirag127/astro-shell/components/FamilySidebar.astro'
 
 interface Props {
   title?: string
@@ -41,7 +42,20 @@ const signInHref = 'https://account.oriz.in/sign-in?return=https://random.oriz.i
         <a href={signInHref}>sign in</a>
       </nav>
     </header>
-    <main id="main"><slot /></main>
+    <div class="oriz-shell">
+      <FamilySidebar slug="oriz-dice-random-tools-app" title="Random Tools">
+        <a slot="tools" href="/tools/coin/">Coin flip</a>
+        <a slot="tools" href="/tools/color/">Color picker</a>
+        <a slot="tools" href="/tools/dice/">Dice roller</a>
+        <a slot="tools" href="/tools/lottery/">Lottery numbers</a>
+        <a slot="tools" href="/tools/name/">Name picker</a>
+        <a slot="tools" href="/tools/number/">Random number</a>
+        <a slot="tools" href="/tools/password/">Password</a>
+        <a slot="tools" href="/tools/shuffle/">Shuffle list</a>
+        <a slot="tools" href="/tools/uuid/">UUID v4</a>
+      </FamilySidebar>
+      <main id="main" class="oriz-main"><slot /></main>
+    </div>
     <footer class="site">
       <span>Oriz Random · part of the <a href="https://oriz.in">oriz</a> family · runs in your browser</span>
       <span>

@@ -1,15 +1,37 @@
 ---
 import BaseLayout from '~/layouts/BaseLayout.astro'
 ---
-<BaseLayout title="random number (min / max) — Oriz Random" description="random number (min / max) — runs in your browser. Part of Oriz Random.">
+<BaseLayout title="Random Number Generator — Oriz Random" description="Generate a cryptographically secure random integer or decimal in any range. Runs in your browser.">
   <article class="tool">
     <p class="back mono"><a href="/">← all tools</a></p>
-    <h1 class="h1">random number (min / max)</h1>
-    <p class="status mono ready">ready · v0</p>
-    <div class="placeholder">
-      <p>This tool is wired. Drop in your input or paste below — everything stays in your browser.</p>
-      <textarea class="io" placeholder="paste input here…" rows="8"></textarea>
-      <p class="hint mono">v0 = UI present + core path wired. Full feature set lands in v0.1.</p>
+    <h1 class="h1">random number</h1>
+    <p class="status mono ready">ready · v0.1</p>
+    <p class="lede">Pick a min, max, and whether you want an integer or decimal. Uses <code>crypto.getRandomValues</code>.</p>
+
+    <div class="tool-body">
+      <div class="fields">
+        <label class="field">
+          <span class="field-label mono">min</span>
+          <input id="min" class="input mono" type="number" value="1" />
+        </label>
+        <label class="field">
+          <span class="field-label mono">max</span>
+          <input id="max" class="input mono" type="number" value="100" />
+        </label>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input id="decimal-toggle" type="checkbox" />
+          <span class="toggle-label">decimal (6 places)</span>
+        </label>
+      </div>
+      <button id="generate-btn" class="btn primary">Generate</button>
+
+      <div id="result-area" class="result-area hidden" aria-live="polite">
+        <span id="result-value" class="big-result mono"></span>
+        <button id="copy-btn" class="btn secondary small">Copy</button>
+      </div>
+      <p id="error-msg" class="error-msg hidden mono" role="alert"></p>
     </div>
   </article>
 </BaseLayout>
@@ -22,18 +44,95 @@ import BaseLayout from '~/layouts/BaseLayout.astro'
   .h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.75rem, 4vw, 2.5rem); margin: 0 0 0.5rem; line-height: 1.1; }
   .status { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 2rem; }
   .status.ready { color: var(--accent); }
-  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; }
-  .placeholder { max-width: 60ch; }
-  .placeholder p { color: var(--muted); margin: 0 0 1rem; }
-  .io {
+  .lede { font-size: 1rem; color: var(--muted); line-height: 1.6; max-width: 56ch; margin: 0 0 1.5rem; }
+  .lede code { background: var(--paper-2); padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.85em; }
+  .tool-body { max-width: 32rem; }
+  .fields { display: flex; gap: 1rem; margin-bottom: 1rem; }
+  .field { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; }
+  .field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .input {
+    padding: 0.6rem 0.75rem;
+    background: var(--paper-2); border: 1px solid var(--rule);
+    color: var(--ink); font-family: var(--font-mono); font-size: 1rem;
     width: 100%;
-    padding: 1rem;
-    background: var(--paper-2);
-    border: 1px solid var(--rule);
-    color: var(--ink);
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    resize: vertical;
   }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 0.75rem; }
+  .input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toggle-row { margin-bottom: 1rem; }
+  .toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+  .toggle input { width: 1rem; height: 1rem; accent-color: var(--accent); cursor: pointer; }
+  .toggle-label { font-size: 0.875rem; color: var(--muted); }
+  .btn {
+    padding: 0.6rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border: none; cursor: pointer; transition: opacity 100ms;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { opacity: 0.7; }
+  .btn.primary { background: var(--accent); color: var(--paper); }
+  .btn.secondary { background: var(--paper-2); color: var(--ink); border: 1px solid var(--rule); }
+  .btn.small { font-size: 0.75rem; padding: 0.4rem 0.85rem; margin-left: 1rem; }
+  .result-area { display: flex; align-items: center; margin-top: 1.5rem; padding: 1rem 1.25rem; background: var(--paper-2); border: 1px solid var(--rule); }
+  .result-area.hidden { display: none; }
+  .big-result { font-size: 2.5rem; font-weight: 700; color: var(--ink); animation: pop 0.2s ease-out; }
+  @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .error-msg { font-size: 0.875rem; color: #e05252; margin-top: 0.5rem; }
+  .error-msg.hidden { display: none; }
 </style>
+
+<script>
+  function cryptoRandFloat(): number {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return arr[0] / 0x100000000;
+  }
+
+  function generate() {
+    const minEl = document.getElementById('min') as HTMLInputElement;
+    const maxEl = document.getElementById('max') as HTMLInputElement;
+    const decimalEl = document.getElementById('decimal-toggle') as HTMLInputElement;
+    const resultArea = document.getElementById('result-area')!;
+    const resultValue = document.getElementById('result-value')!;
+    const errorEl = document.getElementById('error-msg')!;
+
+    const min = parseFloat(minEl.value);
+    const max = parseFloat(maxEl.value);
+
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      resultArea.classList.add('hidden');
+      errorEl.textContent = 'Min must be less than max.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    errorEl.classList.add('hidden');
+
+    let result: string;
+    if (decimalEl.checked) {
+      const val = min + cryptoRandFloat() * (max - min);
+      result = val.toFixed(6);
+    } else {
+      const mn = Math.ceil(min);
+      const mx = Math.floor(max);
+      if (mn > mx) { errorEl.textContent = 'No integers in range.'; errorEl.classList.remove('hidden'); return; }
+      const range = mx - mn + 1;
+      const arr = new Uint32Array(1);
+      crypto.getRandomValues(arr);
+      result = String(mn + (arr[0] % range));
+    }
+
+    // Force re-animation
+    resultValue.style.animation = 'none';
+    void (resultValue as HTMLElement).offsetHeight;
+    resultValue.style.animation = '';
+    resultValue.textContent = result;
+    resultArea.classList.remove('hidden');
+  }
+
+  document.getElementById('generate-btn')!.addEventListener('click', generate);
+  document.getElementById('copy-btn')!.addEventListener('click', async () => {
+    const val = document.getElementById('result-value')!.textContent ?? '';
+    await navigator.clipboard.writeText(val);
+    const btn = document.getElementById('copy-btn') as HTMLButtonElement;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  });
+</script>
